@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Last Layer Tool</title>
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: #1a1a1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        font-family: "Space Mono", monospace;
+        color: #eee;
+        gap: 40px;
+        padding: 48px 20px 64px;
+      }
+
+      h1 {
+        font-size: 11px;
+        letter-spacing: 5px;
+        text-transform: uppercase;
+        color: #444;
+      }
+
+      .section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+      }
+
+      hr {
+        width: 80%;
+        border: none;
+        border-top: 1px solid #252525;
+      }
+
+      canvas,
+      svg {
+        display: block;
+      }
+
+      .input-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      input {
+        width: 46px;
+        padding: 6px;
+        background: #111;
+        border: 1px solid #333;
+        color: #eee;
+        font-family: "Space Mono", monospace;
+        text-align: center;
+        letter-spacing: 2px;
+        font-size: 14px;
+      }
+
+      .sep {
+        color: #444;
+      }
+
+      button {
+        margin-top: 10px;
+        background: #111;
+        border: 1px solid #333;
+        color: #eee;
+        font-family: "Space Mono", monospace;
+        padding: 6px 14px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: #666;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Cube Renderer</h1>
+
+    <div class="section">
+      <div id="renderer"></div>
+    </div>
+
+    <hr />
+
+    <div class="section">
+      <div class="input-row" id="inputs"></div>
+
+      <button id="copy">COPY</button>
+    </div>
+
+    <script>
+      const COLORS = {
+        Y: "#FFE600",
+        G: "#2DCA02",
+        R: "#BB0000",
+        B: "#2100FF",
+        O: "#FFA500",
+        W: "#FFFFFF",
+        X: "#606060",
+      };
+
+      const NS = "http://www.w3.org/2000/svg";
+
+      function renderLastLayer(stateStr, container, scale) {
+        scale = scale || 1;
+
+        const [sides, face] = stateStr.split(":") || [];
+
+        if (!sides || !face) return;
+
+        const [top, right, bottom, left] = sides
+          .split("-")
+          .map((s) => [...s.padEnd(3, "X")]);
+        const faceGrid = face.split("-").map((r) => [...r.padEnd(3, "X")]);
+
+        const col = (k) => COLORS[k] || "#888";
+
+        const S = 40 * scale,
+          G = 4 * scale,
+          PAD = 3 * scale,
+          D = 22 * scale;
+
+        const FW = 3 * S + 4 * G + 2 * PAD;
+
+        const OX = D,
+          OY = D;
+
+        const fL = OX,
+          fR = OX + FW,
+          fT = OY,
+          fB = OY + FW;
+
+        const W = FW + 2 * D,
+          H = FW + 2 * D;
+
+        const conv = 0.14;
+
+        function cX(c) {
+          return OX + PAD + c * (S + G) + G;
+        }
+        function rY(r) {
+          return OY + PAD + r * (S + G) + G;
+        }
+
+        function pX(x) {
+          return x + ((x - (fL + FW / 2)) / (FW / 2)) * D * conv;
+        }
+
+        function pY(y) {
+          return y + ((y - (fT + FW / 2)) / (FW / 2)) * D * conv;
+        }
+
+        const svg = document.createElementNS(NS, "svg");
+
+        svg.setAttribute("width", W);
+        svg.setAttribute("height", H);
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+        const sw = 2 * scale;
+
+        function strip(ps, fill) {
+          const el = document.createElementNS(NS, "polygon");
+          el.setAttribute("points", ps.map((p) => p.join(",")).join(" "));
+          el.setAttribute("fill", fill);
+          el.setAttribute("stroke", "#111");
+          el.setAttribute("stroke-width", sw);
+          el.setAttribute("stroke-linejoin", "round");
+          svg.appendChild(el);
+        }
+
+        function sRect(x, y, w, h, fill, rx) {
+          const el = document.createElementNS(NS, "rect");
+          el.setAttribute("x", x);
+          el.setAttribute("y", y);
+          el.setAttribute("width", w);
+          el.setAttribute("height", h);
+          el.setAttribute("rx", rx !== undefined ? rx : 3 * scale);
+          el.setAttribute("fill", fill);
+          el.setAttribute("stroke", "#111");
+          el.setAttribute("stroke-width", sw);
+          svg.appendChild(el);
+        }
+
+        sRect(fL, fT, FW, FW, "#111", 0);
+
+        for (let i = 0; i < 3; i++) {
+          const ix0 = cX(i),
+            ix1 = ix0 + S,
+            iy = fT;
+
+          strip(
+            [
+              [i === 0 ? 0 : pX(ix0), fT - D],
+              [i === 2 ? W : pX(ix1), fT - D],
+              [i === 2 ? fR : ix1, iy],
+              [i === 0 ? fL : ix0, iy],
+            ],
+            col(top[i]),
+          );
+        }
+
+        for (let i = 0; i < 3; i++) {
+          const ix0 = cX(i),
+            ix1 = ix0 + S,
+            iy = fB;
+
+          strip(
+            [
+              [i === 0 ? fL : ix0, iy],
+              [i === 2 ? fR : ix1, iy],
+              [i === 2 ? W : pX(ix1), fB + D],
+              [i === 0 ? 0 : pX(ix0), fB + D],
+            ],
+            col(bottom[2 - i]),
+          );
+        }
+
+        for (let i = 0; i < 3; i++) {
+          const iy0 = rY(i),
+            iy1 = iy0 + S,
+            ix = fL;
+
+          strip(
+            [
+              [fL - D, i === 0 ? 0 : pY(iy0)],
+              [ix, i === 0 ? fT : iy0],
+              [ix, i === 2 ? fB : iy1],
+              [fL - D, i === 2 ? H : pY(iy1)],
+            ],
+            col(left[2 - i]),
+          );
+        }
+
+        for (let i = 0; i < 3; i++) {
+          const iy0 = rY(i),
+            iy1 = iy0 + S,
+            ix = fR;
+
+          strip(
+            [
+              [ix, i === 0 ? fT : iy0],
+              [fR + D, i === 0 ? 0 : pY(iy0)],
+              [fR + D, i === 2 ? H : pY(iy1)],
+              [ix, i === 2 ? fB : iy1],
+            ],
+            col(right[i]),
+          );
+        }
+
+        for (let r = 0; r < 3; r++)
+          for (let c = 0; c < 3; c++)
+            sRect(
+              OX + PAD + c * (S + G) + G,
+              OY + PAD + r * (S + G) + G,
+              S,
+              S,
+              col(faceGrid[r][c]),
+            );
+
+        container.innerHTML = "";
+        container.appendChild(svg);
+      }
+
+      const letters = "XBGWYOR";
+      const layout = ["-", "-", "-", ":", "-", "-"];
+
+      const inputs = [];
+      const container = document.getElementById("inputs");
+
+      function createInput(i) {
+        const inp = document.createElement("input");
+        inp.maxLength = 3;
+
+        inp.addEventListener("input", () => {
+          let v = inp.value.toUpperCase().replace(/[^XBGWYOR]/g, "");
+
+          inp.value = v;
+
+          if (v.length === 3 && inputs[i + 1]) inputs[i + 1].focus();
+
+          update();
+        });
+
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Backspace" && inp.value.length === 0 && inputs[i - 1])
+            inputs[i - 1].focus();
+        });
+
+        inp.addEventListener("paste", (e) => {
+          e.preventDefault();
+
+          let text = (e.clipboardData.getData("text") || "")
+            .toUpperCase()
+            .replace(/[^XBGWYOR]/g, "");
+
+          let index = i;
+
+          while (text.length && inputs[index]) {
+            inputs[index].value = text.slice(0, 3);
+
+            text = text.slice(3);
+
+            index++;
+          }
+
+          update();
+        });
+
+        return inp;
+      }
+
+      for (let i = 0; i < 7; i++) {
+        const inp = createInput(i);
+        inputs.push(inp);
+        container.appendChild(inp);
+
+        if (i < layout.length) {
+          const sep = document.createElement("span");
+          sep.className = "sep";
+          sep.textContent = layout[i];
+          container.appendChild(sep);
+        }
+      }
+
+      function getState() {
+        return (
+          inputs[0].value +
+          "-" +
+          inputs[1].value +
+          "-" +
+          inputs[2].value +
+          "-" +
+          inputs[3].value +
+          ":" +
+          inputs[4].value +
+          "-" +
+          inputs[5].value +
+          "-" +
+          inputs[6].value
+        );
+      }
+
+      function update() {
+        renderLastLayer(getState(), document.getElementById("renderer"), 1);
+      }
+
+      document.getElementById("copy").onclick = () => {
+        const str = getState();
+
+        navigator.clipboard.writeText(str);
+
+        inputs.forEach((i) => (i.value = ""));
+
+        update();
+      };
+
+      update();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cube Last Layer Renderer</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: #1a1a1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        font-family: "Space Mono", monospace;
+        color: #eee;
+        gap: 40px;
+        padding: 48px 20px;
+      }
+
+      h1 {
+        font-size: 11px;
+        letter-spacing: 5px;
+        text-transform: uppercase;
+        color: #444;
+      }
+
+      .demo-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 56px;
+        justify-content: center;
+        align-items: flex-start;
+      }
+
+      .cube-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .cube-label {
+        font-size: 10px;
+        letter-spacing: 3px;
+        color: #444;
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Last Layer Visualizer</h1>
+    <div class="demo-grid" id="demo"></div>
+
+    <script>
+      // Color palette
+      const COLORS = {
+        Y: "#FFE600",
+        G: "#009B48",
+        R: "#B90000",
+        B: "#0045AD",
+        O: "#FF5900",
+        W: "#FFFFFF",
+        X: "#2e2e2e",
+      };
+
+      // Parse state string: "TOP3-RIGHT3-BOTTOM3-LEFT3:ROW0-ROW1-ROW2"
+      // TOP: left->right, RIGHT: top->bottom, BOTTOM: right->left, LEFT: bottom->top
+      function parseState(str) {
+        const [sides, face] = str.split(":");
+        const [top, right, bottom, left] = sides.split("-").map((s) => [...s]);
+        const faceGrid = face.split("-").map((r) => [...r]);
+        return { top, right, bottom, left, faceGrid };
+      }
+
+      // Main render function
+      function renderLastLayer(stateStr, container, scale) {
+        scale = scale || 1;
+        const { top, right, bottom, left, faceGrid } = parseState(stateStr);
+
+        const S = 40 * scale; // sticker size
+        const G = 4 * scale; // gap between stickers
+        const PAD = 3 * scale; // extra padding around face grid
+        const D = 22 * scale; // side strip depth
+
+        const faceInner = 3 * S + 4 * G;
+        const FW = faceInner + 2 * PAD;
+        const FH = FW;
+
+        const OX = D;
+        const OY = D;
+
+        function colInnerX(col) {
+          return OX + PAD + col * (S + G) + G;
+        }
+        function rowInnerY(row) {
+          return OY + PAD + row * (S + G) + G;
+        }
+
+        const faceLeft = OX;
+        const faceRight = OX + FW;
+        const faceTop = OY;
+        const faceBottom = OY + FH;
+
+        // Slight convergence on side sticker outer edges (trapezoid effect)
+        const conv = 0.14;
+        function projectX(x, depth) {
+          var cx = faceLeft + FW / 2;
+          return x + ((x - cx) / (FW / 2)) * depth * conv;
+        }
+        function projectY(y, depth) {
+          var cy = faceTop + FH / 2;
+          return y + ((y - cy) / (FH / 2)) * depth * conv;
+        }
+
+        const totalW = FW + 2 * D;
+        const totalH = FH + 2 * D;
+
+        var NS = "http://www.w3.org/2000/svg";
+        var svg = document.createElementNS(NS, "svg");
+        svg.setAttribute("width", totalW);
+        svg.setAttribute("height", totalH);
+        svg.setAttribute("viewBox", "0 0 " + totalW + " " + totalH);
+
+        var SW = 2 * scale;
+        var SC = "#111";
+        var CORNER_C = "#181818";
+
+        function poly(pts, fill, strokeW) {
+          strokeW = strokeW || SW;
+          var el = document.createElementNS(NS, "polygon");
+          el.setAttribute(
+            "points",
+            pts
+              .map(function (p) {
+                return p[0] + "," + p[1];
+              })
+              .join(" "),
+          );
+          el.setAttribute("fill", fill);
+          el.setAttribute("stroke", SC);
+          el.setAttribute("stroke-width", strokeW);
+          el.setAttribute("stroke-linejoin", "round");
+          svg.appendChild(el);
+        }
+
+        function addRect(x, y, w, h, fill, rx) {
+          rx = rx !== undefined ? rx : 3 * scale;
+          var el = document.createElementNS(NS, "rect");
+          el.setAttribute("x", x);
+          el.setAttribute("y", y);
+          el.setAttribute("width", w);
+          el.setAttribute("height", h);
+          el.setAttribute("rx", rx);
+          el.setAttribute("ry", rx);
+          el.setAttribute("fill", fill);
+          el.setAttribute("stroke", SC);
+          el.setAttribute("stroke-width", SW);
+          svg.appendChild(el);
+        }
+
+        function c(k) {
+          return COLORS[k] || "#888";
+        }
+
+        // Face background
+        addRect(faceLeft, faceTop, FW, FH, "#111", 0);
+
+        // TOP strip: top[0]=left, top[1]=center, top[2]=right
+        for (var i = 0; i < 3; i++) {
+          var ix0 = colInnerX(i);
+          var ix1 = ix0 + S;
+          var iy = faceTop;
+          var ox0 = projectX(ix0, D);
+          var ox1 = projectX(ix1, D);
+          var oy = faceTop - D;
+          poly(
+            [
+              [ox0, oy],
+              [ox1, oy],
+              [ix1, iy],
+              [ix0, iy],
+            ],
+            c(top[i]),
+          );
+        }
+
+        // BOTTOM strip: bottom[0..2] = right->left
+        // Visual left->right col i uses bottom[2-i]
+        for (var i = 0; i < 3; i++) {
+          var ix0 = colInnerX(i);
+          var ix1 = ix0 + S;
+          var iy = faceBottom;
+          var ox0 = projectX(ix0, D);
+          var ox1 = projectX(ix1, D);
+          var oy = faceBottom + D;
+          poly(
+            [
+              [ix0, iy],
+              [ix1, iy],
+              [ox1, oy],
+              [ox0, oy],
+            ],
+            c(bottom[2 - i]),
+          );
+        }
+
+        // LEFT strip: left[0..2] = bottom->top
+        // Visual top->bottom row i uses left[2-i]
+        for (var i = 0; i < 3; i++) {
+          var iy0 = rowInnerY(i);
+          var iy1 = iy0 + S;
+          var ix = faceLeft;
+          var oy0 = projectY(iy0, D);
+          var oy1 = projectY(iy1, D);
+          var ox = faceLeft - D;
+          poly(
+            [
+              [ox, oy0],
+              [ix, iy0],
+              [ix, iy1],
+              [ox, oy1],
+            ],
+            c(left[2 - i]),
+          );
+        }
+
+        // RIGHT strip: right[0..2] = top->bottom
+        for (var i = 0; i < 3; i++) {
+          var iy0 = rowInnerY(i);
+          var iy1 = iy0 + S;
+          var ix = faceRight;
+          var oy0 = projectY(iy0, D);
+          var oy1 = projectY(iy1, D);
+          var ox = faceRight + D;
+          poly(
+            [
+              [ix, iy0],
+              [ox, oy0],
+              [ox, oy1],
+              [ix, iy1],
+            ],
+            c(right[i]),
+          );
+        }
+
+        // Corner pieces — diagonal dark quadrilaterals connecting strip ends
+        // Top-Left
+        poly(
+          [
+            [faceLeft - D, faceTop - D],
+            [colInnerX(0), faceTop - D],
+            [faceLeft, faceTop],
+            [faceLeft - D, rowInnerY(0)],
+          ],
+          CORNER_C,
+          1.5 * scale,
+        );
+
+        // Top-Right
+        poly(
+          [
+            [colInnerX(2) + S, faceTop - D],
+            [faceRight + D, faceTop - D],
+            [faceRight + D, rowInnerY(0)],
+            [faceRight, faceTop],
+          ],
+          CORNER_C,
+          1.5 * scale,
+        );
+
+        // Bottom-Left
+        poly(
+          [
+            [faceLeft - D, rowInnerY(2) + S],
+            [faceLeft, faceBottom],
+            [colInnerX(0), faceBottom + D],
+            [faceLeft - D, faceBottom + D],
+          ],
+          CORNER_C,
+          1.5 * scale,
+        );
+
+        // Bottom-Right
+        poly(
+          [
+            [faceRight, faceBottom],
+            [faceRight + D, rowInnerY(2) + S],
+            [faceRight + D, faceBottom + D],
+            [colInnerX(2) + S, faceBottom + D],
+          ],
+          CORNER_C,
+          1.5 * scale,
+        );
+
+        // Face stickers (drawn last so they appear on top)
+        for (var row = 0; row < 3; row++) {
+          for (var col = 0; col < 3; col++) {
+            var x = OX + PAD + col * (S + G) + G;
+            var y = OY + PAD + row * (S + G) + G;
+            addRect(x, y, S, S, c(faceGrid[row][col]));
+          }
+        }
+
+        container.innerHTML = "";
+        svg.style.display = "block";
+        container.appendChild(svg);
+      }
+
+      // ─── Demos ────────────────────────────────────────────────────────────────────
+      var demos = [
+        { label: "OLL 53", state: "XYX-XYX-XYX-XYX:YXY-XYX-YXY" },
+        { label: "PLL Gb", state: "GOR-BBG-RGB-ORO:YYY-YYY-YYY" },
+        { label: "OLL Cross", state: "XYX-XYX-XYX-XYX:XXX-YYY-XXX" },
+        { label: "Solved", state: "YYY-YYY-YYY-YYY:YYY-YYY-YYY" },
+      ];
+
+      var grid = document.getElementById("demo");
+      demos.forEach(function (d) {
+        var wrap = document.createElement("div");
+        wrap.className = "cube-wrap";
+        var div = document.createElement("div");
+        renderLastLayer(d.state, div, 1.0);
+        var lbl = document.createElement("div");
+        lbl.className = "cube-label";
+        lbl.textContent = d.label;
+        wrap.appendChild(div);
+        wrap.appendChild(lbl);
+        grid.appendChild(wrap);
+      });
+    </script>
+  </body>
+</html>
