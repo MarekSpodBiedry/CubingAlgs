@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cube Renderer</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #1a1a1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        font-family: "Space Mono", monospace;
+        color: #eee;
+        gap: 40px;
+        padding: 48px 20px 64px;
+      }
+      h1 {
+        font-size: 11px;
+        letter-spacing: 5px;
+        text-transform: uppercase;
+        color: #444;
+      }
+      h2 {
+        font-size: 10px;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        color: #333;
+      }
+      .section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+        width: 100%;
+      }
+      .demo-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        justify-content: center;
+        align-items: flex-end;
+      }
+      .cube-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .cube-label {
+        font-size: 10px;
+        letter-spacing: 3px;
+        color: #3a3a3a;
+        text-transform: uppercase;
+      }
+      hr {
+        width: 80%;
+        border: none;
+        border-top: 1px solid #252525;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Cube Renderer</h1>
+
+    <div class="section">
+      <h2>— Last Layer (top view) —</h2>
+      <div class="demo-grid" id="demo-ll"></div>
+    </div>
+    <hr />
+    <div class="section">
+      <h2>— Full Cube (right lean) —</h2>
+      <div class="demo-grid" id="demo-3d-r"></div>
+    </div>
+    <hr />
+    <div class="section">
+      <h2>— Full Cube (left lean) —</h2>
+      <div class="demo-grid" id="demo-3d-l"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      const COLORS = {
+        Y: 0xffe600,
+        G: 0x2dca02,
+        R: 0xbb0000,
+        B: 0x2100ff,
+        O: 0xffa500,
+        W: 0xffffff,
+        X: 0x606060,
+      };
+      const STROKE = 0x111111;
+
+      const NS = "http://www.w3.org/2000/svg";
+
+      function renderLastLayer(stateStr, container, scale) {
+        scale = scale || 1;
+        const [sides, face] = stateStr.split(":");
+        const [top, right, bottom, left] = sides.split("-").map((s) => [...s]);
+        const faceGrid = face.split("-").map((r) => [...r]);
+        const COLMAP = {
+          Y: "#FFE600",
+          G: "#2DCA02",
+          R: "#BB0000",
+          B: "#2100FF",
+          O: "#FFA500",
+          W: "#FFFFFF",
+          X: "#606060",
+        };
+        const col = (k) => COLMAP[k] || "#888";
+
+        const S = 40 * scale,
+          G = 4 * scale,
+          PAD = 3 * scale,
+          D = 22 * scale;
+        const FW = 3 * S + 4 * G + 2 * PAD;
+        const OX = D,
+          OY = D;
+        const fL = OX,
+          fR = OX + FW,
+          fT = OY,
+          fB = OY + FW;
+        const W = FW + 2 * D,
+          H = FW + 2 * D;
+        const conv = 0.14;
+        function cX(c) {
+          return OX + PAD + c * (S + G) + G;
+        }
+        function rY(r) {
+          return OY + PAD + r * (S + G) + G;
+        }
+        function pX(x) {
+          return x + ((x - (fL + FW / 2)) / (FW / 2)) * D * conv;
+        }
+        function pY(y) {
+          return y + ((y - (fT + FW / 2)) / (FW / 2)) * D * conv;
+        }
+
+        const svg = document.createElementNS(NS, "svg");
+        svg.setAttribute("width", W);
+        svg.setAttribute("height", H);
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        const sw = 2 * scale;
+
+        function strip(ps, fill) {
+          const el = document.createElementNS(NS, "polygon");
+          el.setAttribute("points", ps.map((p) => p.join(",")).join(" "));
+          el.setAttribute("fill", fill);
+          el.setAttribute("stroke", "#111");
+          el.setAttribute("stroke-width", sw);
+          el.setAttribute("stroke-linejoin", "round");
+          svg.appendChild(el);
+        }
+        function sRect(x, y, w, h, fill, rx) {
+          const el = document.createElementNS(NS, "rect");
+          el.setAttribute("x", x);
+          el.setAttribute("y", y);
+          el.setAttribute("width", w);
+          el.setAttribute("height", h);
+          el.setAttribute("rx", rx !== undefined ? rx : 3 * scale);
+          el.setAttribute("fill", fill);
+          el.setAttribute("stroke", "#111");
+          el.setAttribute("stroke-width", sw);
+          svg.appendChild(el);
+        }
+
+        sRect(fL, fT, FW, FW, "#111", 0);
+        for (let i = 0; i < 3; i++) {
+          const ix0 = cX(i),
+            ix1 = ix0 + S,
+            iy = fT;
+          strip(
+            [
+              [i === 0 ? 0 : pX(ix0), fT - D],
+              [i === 2 ? W : pX(ix1), fT - D],
+              [i === 2 ? fR : ix1, iy],
+              [i === 0 ? fL : ix0, iy],
+            ],
+            col(top[i]),
+          );
+        }
+        for (let i = 0; i < 3; i++) {
+          const ix0 = cX(i),
+            ix1 = ix0 + S,
+            iy = fB;
+          strip(
+            [
+              [i === 0 ? fL : ix0, iy],
+              [i === 2 ? fR : ix1, iy],
+              [i === 2 ? W : pX(ix1), fB + D],
+              [i === 0 ? 0 : pX(ix0), fB + D],
+            ],
+            col(bottom[2 - i]),
+          );
+        }
+        for (let i = 0; i < 3; i++) {
+          const iy0 = rY(i),
+            iy1 = iy0 + S,
+            ix = fL;
+          strip(
+            [
+              [fL - D, i === 0 ? 0 : pY(iy0)],
+              [ix, i === 0 ? fT : iy0],
+              [ix, i === 2 ? fB : iy1],
+              [fL - D, i === 2 ? H : pY(iy1)],
+            ],
+            col(left[2 - i]),
+          );
+        }
+        for (let i = 0; i < 3; i++) {
+          const iy0 = rY(i),
+            iy1 = iy0 + S,
+            ix = fR;
+          strip(
+            [
+              [ix, i === 0 ? fT : iy0],
+              [fR + D, i === 0 ? 0 : pY(iy0)],
+              [fR + D, i === 2 ? H : pY(iy1)],
+              [ix, i === 2 ? fB : iy1],
+            ],
+            col(right[i]),
+          );
+        }
+        for (let r = 0; r < 3; r++)
+          for (let c = 0; c < 3; c++)
+            sRect(
+              OX + PAD + c * (S + G) + G,
+              OY + PAD + r * (S + G) + G,
+              S,
+              S,
+              col(faceGrid[r][c]),
+            );
+
+        container.innerHTML = "";
+        svg.style.display = "block";
+        container.appendChild(svg);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 3D CUBE using Three.js
+      //
+      // State: "UUU-UUU-UUU:RRR-RRR-RRR:FFF-FFF-FFF"
+      //
+      // U (top):   row0=back, row2=front; col0=left, col2=right
+      // R (right): row0=top,  row2=bot;   col0=front, col2=back
+      // F (front): row0=top,  row2=bot;   col0=left,  col2=right
+      //
+      // lean='right': camera on right side → sees top + left face + front face
+      // lean='left':  camera on left side  → sees top + right face + front face
+      // ═══════════════════════════════════════════════════════════════════════════
+
+      function parse3D(str) {
+        const parts = str.split(":");
+        return {
+          U: parts[0].split("-").map((r) => [...r]),
+          R: parts[1].split("-").map((r) => [...r]),
+          F: parts[2].split("-").map((r) => [...r]),
+        };
+      }
+
+      function renderCube3D(stateStr, container, lean, sizePx) {
+        sizePx = sizePx || 280;
+        lean = lean || "right";
+        const { U, R, F } = parse3D(stateStr);
+
+        // Three.js scene
+        const scene = new THREE.Scene();
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+        });
+        renderer.setSize(sizePx, sizePx);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setClearColor(0x000000, 0);
+
+        // Orthographic camera — no perspective distortion
+        const aspect = 1;
+        const camSize = 2.8;
+        const camera = new THREE.OrthographicCamera(
+          -camSize,
+          camSize,
+          camSize,
+          -camSize,
+          0.1,
+          100,
+        );
+
+        // Camera position: looking at the cube from above and to one side
+        // right lean: camera is to the upper-right → we see top, left face, front face
+        // left lean:  camera is to the upper-left  → we see top, right face, front face
+        // Elevation ~35° above horizontal, azimuth ±45°
+        // Camera always on the upper-right. For left lean we rotate the CUBE, not the camera.
+        const elev = (35 * Math.PI) / 180;
+        const azim = (35 * Math.PI) / 180;
+        const dist = 10;
+        camera.position.set(
+          dist * Math.cos(elev) * Math.sin(azim),
+          dist * Math.sin(elev),
+          dist * Math.cos(elev) * Math.cos(azim),
+        );
+        camera.lookAt(0, 0, 0);
+        camera.up.set(0, 1, 0);
+
+        // Group: for left lean rotate -20° around Y so left face comes forward
+        const group = new THREE.Group();
+        if (lean === "left") group.rotation.y = -(20 * Math.PI) / 180;
+        scene.add(group);
+
+        const CELL = 1.0;
+        const GAP = 0.05;
+        const STICKER_SIZE = CELL - GAP * 2;
+
+        function makeStickerMesh(color, darkFactor) {
+          const c = new THREE.Color(color);
+          c.multiplyScalar(Math.max(0, 1 + darkFactor));
+          return new THREE.Mesh(
+            new THREE.PlaneGeometry(STICKER_SIZE, STICKER_SIZE),
+            new THREE.MeshBasicMaterial({ color: c }),
+          );
+        }
+        function makeBlackTile() {
+          return new THREE.Mesh(
+            new THREE.PlaneGeometry(CELL, CELL),
+            new THREE.MeshBasicMaterial({ color: 0x111111 }),
+          );
+        }
+        function cellCenter(i) {
+          return i * CELL - CELL;
+        }
+
+        // Cube body first
+        group.add(
+          new THREE.Mesh(
+            new THREE.BoxGeometry(2.99, 2.99, 2.99),
+            new THREE.MeshBasicMaterial({ color: 0x111111 }),
+          ),
+        );
+
+        // TOP face (U): y=+1.5, row0=back(z=-1), row2=front(z=+1), col0=left(x=-1)
+        for (let row = 0; row < 3; row++) {
+          for (let col = 0; col < 3; col++) {
+            const x = cellCenter(col),
+              z = cellCenter(2 - row);
+            const bg = makeBlackTile();
+            bg.rotation.x = -Math.PI / 2;
+            bg.position.set(x, 1.501, z);
+            group.add(bg);
+            const s = makeStickerMesh(COLORS[U[row][col]] || 0x606060, 0);
+            s.rotation.x = -Math.PI / 2;
+            s.position.set(x, 1.502, z);
+            group.add(s);
+          }
+        }
+        // RIGHT face (R): x=+1.5, row0=top(y=+1), col0=front(z=+1)
+        for (let row = 0; row < 3; row++) {
+          for (let col = 0; col < 3; col++) {
+            const y = cellCenter(2 - row),
+              z = cellCenter(2 - col);
+            const bg = makeBlackTile();
+            bg.rotation.y = Math.PI / 2;
+            bg.position.set(1.501, y, z);
+            group.add(bg);
+            const s = makeStickerMesh(COLORS[R[row][col]] || 0x606060, -0.12);
+            s.rotation.y = Math.PI / 2;
+            s.position.set(1.502, y, z);
+            group.add(s);
+          }
+        }
+        // FRONT face (F): z=+1.5, row0=top(y=+1), col0=left(x=-1)
+        for (let row = 0; row < 3; row++) {
+          for (let col = 0; col < 3; col++) {
+            const x = cellCenter(col),
+              y = cellCenter(2 - row);
+            const bg = makeBlackTile();
+            bg.position.set(x, y, 1.501);
+            group.add(bg);
+            const s = makeStickerMesh(COLORS[F[row][col]] || 0x606060, -0.22);
+            s.position.set(x, y, 1.502);
+            group.add(s);
+          }
+        }
+
+        renderer.render(scene, camera);
+
+        container.innerHTML = "";
+        container.appendChild(renderer.domElement);
+      }
+
+      const llDemos = [
+        { label: "OLL 53", state: "XYX-XYX-XYX-XYX:YXY-XYX-YXY" },
+        { label: "PLL Gb", state: "GOR-BBG-RGB-ORO:YYY-YYY-YYY" },
+        { label: "Cross", state: "XYX-XYX-XYX-XYX:XXX-YYY-XXX" },
+        { label: "Solved", state: "YYY-YYY-YYY-YYY:YYY-YYY-YYY" },
+      ];
+
+      const cubeDemos = [
+        { label: "Solved", state: "YYY-YYY-YYY:RRR-RRR-RRR:BBB-BBB-BBB" },
+        { label: "Checkerboard", state: "YXY-XYX-YXY:RXR-XRX-RXR:BXB-XBX-BXB" },
+        { label: "All Gray", state: "XXX-XXX-XXX:XXX-XXX-XXX:XXX-XXX-XXX" },
+      ];
+
+      function addDemo(state, grid, renderFn, ...args) {
+        const wrap = document.createElement("div");
+        wrap.className = "cube-wrap";
+        const div = document.createElement("div");
+        renderFn(state, div, ...args);
+        wrap.appendChild(div);
+        grid.appendChild(wrap);
+        return wrap;
+      }
+
+      llDemos.forEach((d) => {
+        const w = addDemo(
+          d.state,
+          document.getElementById("demo-ll"),
+          renderLastLayer,
+          1.0,
+        );
+        const l = document.createElement("div");
+        l.className = "cube-label";
+        l.textContent = d.label;
+        w.appendChild(l);
+      });
+
+      cubeDemos.forEach((d) => {
+        const w = addDemo(
+          d.state,
+          document.getElementById("demo-3d-r"),
+          renderCube3D,
+          "right",
+          260,
+        );
+        const l = document.createElement("div");
+        l.className = "cube-label";
+        l.textContent = d.label;
+        w.appendChild(l);
+      });
+
+      cubeDemos.forEach((d) => {
+        const w = addDemo(
+          d.state,
+          document.getElementById("demo-3d-l"),
+          renderCube3D,
+          "left",
+          260,
+        );
+        const l = document.createElement("div");
+        l.className = "cube-label";
+        l.textContent = d.label;
+        w.appendChild(l);
+      });
+    </script>
+  </body>
+</html>
