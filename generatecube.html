@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Cube Renderer</title>
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: #1a1a1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        font-family: "Space Mono", monospace;
+        color: #eee;
+        gap: 40px;
+        padding: 48px 20px 64px;
+      }
+
+      h1 {
+        font-size: 11px;
+        letter-spacing: 5px;
+        text-transform: uppercase;
+        color: #444;
+      }
+
+      .section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+      }
+
+      hr {
+        width: 80%;
+        border: none;
+        border-top: 1px solid #252525;
+      }
+
+      canvas {
+        display: block;
+      }
+
+      .input-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+        align-items: center;
+      }
+
+      input {
+        width: 48px;
+        padding: 6px;
+        background: #111;
+        border: 1px solid #333;
+        color: #eee;
+        font-family: "Space Mono", monospace;
+        text-align: center;
+        letter-spacing: 2px;
+        font-size: 14px;
+      }
+
+      .sep {
+        color: #444;
+      }
+
+      button {
+        background: #111;
+        border: 1px solid #333;
+        color: #eee;
+        font-family: "Space Mono", monospace;
+        padding: 6px 14px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: #666;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>3D Cube Renderer</h1>
+
+    <div class="section">
+      <div id="cube"></div>
+    </div>
+
+    <hr />
+
+    <div class="section">
+      <div class="input-row" id="inputs"></div>
+
+      <button id="copy">COPY</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+      // ─── COLORS ─────────────────────────
+
+      const COLORS = {
+        Y: 0xffe600,
+        G: 0x2dca02,
+        R: 0xbb0000,
+        B: 0x2100ff,
+        O: 0xffa500,
+        W: 0xffffff,
+        X: 0x606060,
+      };
+
+      // ─── THREE.JS CUBE ──────────────────
+
+      let scene, camera, renderer, group;
+
+      function initCube() {
+        scene = new THREE.Scene();
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(280, 280);
+
+        camera = new THREE.OrthographicCamera(-3, 3, 3, -3, 0.1, 100);
+
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+
+        group = new THREE.Group();
+        scene.add(group);
+
+        document.getElementById("cube").appendChild(renderer.domElement);
+      }
+
+      function parse3D(str) {
+        const parts = str.split(":");
+
+        return {
+          U: parts[0].split("-").map((r) => [...r.padEnd(3, "X")]),
+          R: parts[1].split("-").map((r) => [...r.padEnd(3, "X")]),
+          F: parts[2].split("-").map((r) => [...r.padEnd(3, "X")]),
+        };
+      }
+
+      function renderCube3D(state) {
+        group.clear();
+
+        const { U, R, F } = parse3D(state);
+
+        const CELL = 1;
+        const GAP = 0.05;
+
+        function sticker(color) {
+          return new THREE.Mesh(
+            new THREE.PlaneGeometry(CELL - GAP, CELL - GAP),
+            new THREE.MeshBasicMaterial({ color }),
+          );
+        }
+
+        function center(i) {
+          return i * CELL - CELL;
+        }
+
+        for (let r = 0; r < 3; r++)
+          for (let c = 0; c < 3; c++) {
+            const s = sticker(COLORS[U[r][c]] || 0x606060);
+            s.rotation.x = -Math.PI / 2;
+            s.position.set(center(c), 1.5, center(2 - r));
+            group.add(s);
+          }
+
+        for (let r = 0; r < 3; r++)
+          for (let c = 0; c < 3; c++) {
+            const s = sticker(COLORS[R[r][c]] || 0x606060);
+            s.rotation.y = Math.PI / 2;
+            s.position.set(1.5, center(2 - r), center(2 - c));
+            group.add(s);
+          }
+
+        for (let r = 0; r < 3; r++)
+          for (let c = 0; c < 3; c++) {
+            const s = sticker(COLORS[F[r][c]] || 0x606060);
+            s.position.set(center(c), center(2 - r), 1.5);
+            group.add(s);
+          }
+
+        renderer.render(scene, camera);
+      }
+
+      initCube();
+
+      // ─── INPUT SYSTEM ───────────────────
+
+      const layout = ["-", "-", ":", "-", "-", ":", "-", "-"];
+
+      const inputs = [];
+      const container = document.getElementById("inputs");
+
+      function makeInput(i) {
+        const inp = document.createElement("input");
+        inp.maxLength = 3;
+
+        inp.addEventListener("input", () => {
+          let v = inp.value.toUpperCase().replace(/[^XBGWYOR]/g, "");
+
+          inp.value = v;
+
+          if (v.length === 3 && inputs[i + 1]) inputs[i + 1].focus();
+
+          update();
+        });
+
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Backspace" && inp.value.length === 0 && inputs[i - 1])
+            inputs[i - 1].focus();
+        });
+
+        inp.addEventListener("paste", (e) => {
+          e.preventDefault();
+
+          let text = e.clipboardData
+            .getData("text")
+            .toUpperCase()
+            .replace(/[^XBGWYOR]/g, "");
+
+          let idx = i;
+
+          while (text.length && inputs[idx]) {
+            inputs[idx].value = text.slice(0, 3);
+            text = text.slice(3);
+            idx++;
+          }
+
+          update();
+        });
+
+        return inp;
+      }
+
+      for (let i = 0; i < 9; i++) {
+        const inp = makeInput(i);
+        inputs.push(inp);
+
+        container.appendChild(inp);
+
+        if (i < layout.length) {
+          const sep = document.createElement("span");
+          sep.className = "sep";
+          sep.textContent = layout[i];
+
+          container.appendChild(sep);
+        }
+      }
+
+      function getState() {
+        return (
+          inputs[0].value +
+          "-" +
+          inputs[1].value +
+          "-" +
+          inputs[2].value +
+          ":" +
+          inputs[3].value +
+          "-" +
+          inputs[4].value +
+          "-" +
+          inputs[5].value +
+          ":" +
+          inputs[6].value +
+          "-" +
+          inputs[7].value +
+          "-" +
+          inputs[8].value
+        );
+      }
+
+      function update() {
+        renderCube3D(getState());
+      }
+
+      document.getElementById("copy").onclick = () => {
+        const str = getState();
+
+        navigator.clipboard.writeText(str);
+
+        inputs.forEach((i) => (i.value = ""));
+
+        update();
+      };
+
+      update();
+    </script>
+  </body>
+</html>
